@@ -15,10 +15,10 @@
 import re
 
 # Third party imports
-from qtpy.QtCore import Qt, QTimer, Signal, Slot, QEvent
+from qtpy.QtCore import Qt, QTimer, Signal, Slot, QEvent, QRect, QPoint, QSize
 from qtpy.QtGui import QTextCursor
-from qtpy.QtWidgets import (QGridLayout, QHBoxLayout, QLabel,
-                            QSizePolicy, QWidget)
+from qtpy.QtWidgets import (QGridLayout, QHBoxLayout, QLabel, QLayout,
+                            QSizePolicy, QVBoxLayout, QWidget)
 
 # Local imports
 from spyder.config.base import _
@@ -63,14 +63,21 @@ class FindReplace(QWidget):
         glayout = QGridLayout()
         glayout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(glayout)
-        
-        self.close_button = create_toolbutton(self, triggered=self.hide,
-                                      icon=ima.icon('DialogCloseButton'))
-        glayout.addWidget(self.close_button, 0, 0)
-        
-        # Find layout
+
+        self.close_button = create_toolbutton(
+            self, triggered=self.hide, icon=ima.icon('DialogCloseButton'))
+
+        close_button_stretchbox = QVBoxLayout()
+        close_button_stretchbox.addWidget(self.close_button)
+        close_button_stretchbox.addStretch(100)
+
+        glayout.addLayout(close_button_stretchbox, 0, 0, 2, 1)
+
+        # ---- Find layout
+
         self.search_text = PatternComboBox(self, tip=_("Search string"),
                                            adjust_to_minimum=False)
+        self.search_text.setMinimumWidth(self.search_text.sizeHint().width())
 
         self.return_shift_pressed.connect(
                 lambda:
@@ -118,17 +125,18 @@ class FindReplace(QWidget):
         self.highlight_button.setCheckable(True)
         self.highlight_button.toggled.connect(self.toggle_highlighting)
 
-        hlayout = QHBoxLayout()
+        hlayout = FindReplaceLayout()
         self.widgets = [self.close_button, self.search_text,
                         self.number_matches_text, self.previous_button,
                         self.next_button, self.re_button, self.case_button,
                         self.words_button, self.highlight_button]
         for widget in self.widgets[1:]:
             hlayout.addWidget(widget)
+
         glayout.addLayout(hlayout, 0, 1)
 
-        # Replace layout
-        replace_with = QLabel(_("Replace with:"))
+        # ---- Replace layout
+
         self.replace_text = PatternComboBox(self, adjust_to_minimum=False,
                                             tip=_('Replace string'))
         self.replace_text.valid.connect(
@@ -153,10 +161,18 @@ class FindReplace(QWidget):
                                      text_beside_icon=True)
         self.replace_all_button.clicked.connect(self.update_replace_combo)
         self.replace_all_button.clicked.connect(self.update_search_combo)
-        
-        self.replace_layout = QHBoxLayout()
-        widgets = [replace_with, self.replace_text, self.replace_button,
+
+        replace_with = QWidget()
+        replace_with_lay = QHBoxLayout(replace_with)
+        replace_with_lay.addWidget(QLabel(_("Replace with:")))
+        replace_with_lay.addWidget(self.replace_text)
+        replace_with_lay.setContentsMargins(0, 0, 0, 0)
+        replace_with_lay.setStretch(1, 100)
+
+        widgets = [replace_with, self.replace_button,
                    self.replace_sel_button, self.replace_all_button]
+
+        self.replace_layout = FindReplaceLayout()
         for widget in widgets:
             self.replace_layout.addWidget(widget)
         glayout.addLayout(self.replace_layout, 1, 1)
@@ -584,3 +600,119 @@ class FindReplace(QWidget):
             self.number_matches_text.setText(matches_string)
         else:
             self.number_matches_text.setText(_(u"no matches"))
+
+
+class FindReplaceLayout(QLayout):
+    def __init__(self, parent=None, margin=0, spacing=-1):
+        super(FindReplaceLayout, self).__init__(parent)
+
+        if parent is not None:
+            self.setMargin(margin)
+
+        self.setSpacing(spacing)
+
+        self.itemList = []
+
+    def __del__(self):
+        """Abstract method implementation."""
+        item = self.takeAt(0)
+        while item:
+            item = self.takeAt(0)
+
+    def addItem(self, item):
+        """Add an item to the layout."""
+        self.itemList.append(item)
+
+    def count(self):
+        """Abstract method implementation."""
+        return len(self.itemList)
+
+    def itemAt(self, index):
+        """Abstract method implementation."""
+        if index >= 0 and index < len(self.itemList):
+            return self.itemList[index]
+
+        return None
+
+    def takeAt(self, index):
+        """Abstract method implementation."""
+        if index >= 0 and index < len(self.itemList):
+            return self.itemList.pop(index)
+
+        return None
+
+    def expandingDirections(self):
+        """Abstract method implementation."""
+        return Qt.Orientations(Qt.Orientation(0))
+
+    def hasHeightForWidth(self):
+        """Abstract method implementation."""
+        return True
+
+    def heightForWidth(self, width):
+        height = self.setup_layout(QRect(0, 0, width, 0), True)
+        return height
+
+    def setGeometry(self, rect):
+        """Abstract method implementation."""
+        super(FindReplaceLayout, self).setGeometry(rect)
+        self.setup_layout(rect, False)
+
+    def sizeHint(self):
+        """Abstract method implementation."""
+        return self.minimumSize()
+
+    def minimumSize(self):
+        """Abstract method implementation."""
+        size = QSize()
+        for item in self.itemList:
+            size = size.expandedTo(item.minimumSize())
+        return size
+
+    def max_line_height(self):
+        """Return the maximum height of the layout's items."""
+        height = 0
+        for item in self.itemList:
+            height = max(height, item.sizeHint().height())
+        return height
+
+    def setup_layout(self, rect, testOnly):
+        """Setup the items geometry of the layout."""
+        x = rect.x()
+        y = rect.y()
+        lineHeight = 0
+
+        # Calcul the stretch width for the first item.
+        total_width = x
+        for item in self.itemList:
+            wid = item.widget()
+            ct = wid.sizePolicy().controlType()
+            spaceX = (self.spacing() +
+                      wid.style().layoutSpacing(ct, ct, Qt.Horizontal))
+            total_width = total_width + item.sizeHint().width() + spaceX
+        stretch = max(rect.right() - total_width + spaceX, 0)
+
+        for item in self.itemList:
+            wid = item.widget()
+            ct = wid.sizePolicy().controlType()
+            spaceX = (self.spacing() +
+                      wid.style().layoutSpacing(ct, ct, Qt.Horizontal))
+            spaceY = (self.spacing() +
+                      wid.style().layoutSpacing(ct, ct, Qt.Vertical))
+
+            w = item.sizeHint().width() + stretch
+            h = item.sizeHint().height()
+            nextX = x + w + spaceX
+            if nextX - spaceX > rect.right() and lineHeight > 0:
+                x = rect.x()
+                y = y + lineHeight + spaceY
+                nextX = x + w + spaceX
+                lineHeight = 0
+            if not testOnly:
+                vpad = (self.max_line_height() - h) / 2
+                item.setGeometry(QRect(QPoint(x, y + vpad), QSize(w, h)))
+            stretch = 0
+            x = nextX
+            lineHeight = max(lineHeight, self.max_line_height())
+
+        return y + lineHeight - rect.y()
