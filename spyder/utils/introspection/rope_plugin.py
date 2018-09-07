@@ -11,17 +11,18 @@ Rope introspection plugin
 import time
 import imp
 
+from spyder_kernels.utils.dochelpers import getsignaturefromtext
+
 from spyder.config.base import get_conf_path, STDERR
 from spyder.utils import encoding, programs
 from spyder.py3compat import PY2
-from spyder.utils.dochelpers import getsignaturefromtext
 from spyder.utils import sourcecode
 from spyder.utils.debug import log_last_error, log_dt
 from spyder.utils.introspection.manager import (
     DEBUG_EDITOR, LOG_FILENAME, IntrospectionPlugin)
 from spyder.utils.introspection.module_completion import (
     get_preferred_submodules)
-from spyder.utils.introspection.manager import ROPE_REQVER
+from spyder.utils.introspection.utils import default_info_response
 
 try:
     try:
@@ -58,8 +59,8 @@ class RopePlugin(IntrospectionPlugin):
 
     def load_plugin(self):
         """Load the Rope introspection plugin"""
-        if not programs.is_module_installed('rope', ROPE_REQVER):
-            raise ImportError('Requires Rope %s' % ROPE_REQVER)
+        if not programs.is_module_installed('rope'):
+            raise ImportError('Requires Rope')
         self.project = None
         self.create_rope_project(root_path=get_conf_path())
         submods = get_preferred_submodules()
@@ -123,7 +124,7 @@ class RopePlugin(IntrospectionPlugin):
     def get_info(self, info):
         """Get a formatted calltip and docstring from Rope"""
         if self.project is None:
-            return
+            return default_info_response()
         filename = info['filename']
         source_code = info['source_code']
         offset = info['position']
@@ -209,10 +210,10 @@ class RopePlugin(IntrospectionPlugin):
                 note = 'Present in %s module' % module
 
         if not doc_text and not calltip:
-            return
+            return default_info_response()
 
         return dict(name=obj_fullname, argspec=argspec, note=note,
-            docstring=doc_text, calltip=calltip)
+                    docstring=doc_text, calltip=calltip)
 
     def get_definition(self, info):
         """Find a definition location using Rope"""

@@ -56,6 +56,7 @@ def test_fallback_plugin():
         'dummy.py'))
     assert resp is None
 
+
 def test_extensions():
     """Test the extentions related methods from the fallback plugin."""
     ext = python_like_exts()
@@ -67,16 +68,17 @@ def test_extensions():
     path = get_parent_until(os.path.abspath(FALLBACK_PLUGIN_FILE))
     assert path == 'spyder.utils.introspection.fallback_plugin'
 
-    line = 'from spyder.widgets.sourcecode.codeeditor import CodeEditor'
+    line = 'from spyder.plugins.editor.widgets.codeeditor import CodeEditor'
     path = python_like_mod_finder(line)
     assert path.endswith('codeeditor.py')
-    path = python_like_mod_finder(line, stop_token='sourcecode')
-    assert path.endswith('__init__.py') and 'sourcecode' in path
+    path = python_like_mod_finder(line, stop_token='widgets')
+    assert path.endswith('__init__.py') and 'widgets' in path
 
     path = osp.expanduser(r'~/.spyder2/temp.py')
     if os.path.exists(path):
         path = get_parent_until(path)
         assert path == '.spyder2.temp', path
+
 
 def test_get_completions():
     """Test the get_completions method from the Fallback plugin."""
@@ -97,6 +99,7 @@ def test_get_completions():
     comp = p.get_completions(CodeInfo('completions', code, len(code), 'dummy.sh'))
     assert ('function', '') in comp, comp
 
+
 def test_get_definition_method():
     """Test the get_definition method for methods."""
     p = FallbackPlugin()
@@ -113,6 +116,7 @@ test(1,'''
         'dummy.py', is_python_like=True))
     assert path == 'dummy.py' and line == 1
 
+
 def test_get_definition_class():
     """Test the get_definition method for classes."""
     p = FallbackPlugin()
@@ -126,6 +130,21 @@ def test_get_definition_class():
     path, line = p.get_definition(CodeInfo('definition', code, len(code),
         'dummy.py', is_python_like=True))
     assert line == 4
+
+
+def test_default_info():
+    """Test default info response."""
+    p = FallbackPlugin()
+    source_code = 'foo'
+    docs = p.get_info(CodeInfo('info', source_code, len(source_code),
+                               __file__))
+    assert sorted(list(docs.keys())) == sorted(['name', 'argspec', 'note',
+                                                'docstring', 'calltip'])
+    assert not docs['name']
+    assert not docs['argspec']
+    assert not docs['note']
+    assert not docs['docstring']
+    assert not docs['calltip']
 
 
 if __name__ == "__main__":
