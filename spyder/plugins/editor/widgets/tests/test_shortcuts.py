@@ -71,8 +71,13 @@ def test_default_keybinding_values():
     assert get_shortcut('editor', 'transform to lowercase') == 'Ctrl+U'
     assert get_shortcut('editor', 'transform to uppercase') == 'Ctrl+Shift+U'
     assert get_shortcut('editor', 'go to line') == 'Ctrl+L'
+    assert get_shortcut('editor', 'next word') == 'Ctrl+Right'
+    assert get_shortcut('editor', 'previous word') == 'Ctrl+Left'
 
 
+@pytest.mark.skipif(
+    sys.platform.startswith('linux') and os.environ.get('CI') is not None,
+    reason="It fails on Linux due to the lack of a proper X server.")
 def test_start_and_end_of_document_shortcuts(editor_bot):
     """
     Test that the start of document and end of document shortcut are working
@@ -93,6 +98,9 @@ def test_start_and_end_of_document_shortcuts(editor_bot):
     assert editor.get_cursor_line_column() == (0, 0)
 
 
+@pytest.mark.skipif(
+    sys.platform.startswith('linux') and os.environ.get('CI') is not None,
+    reason="It fails on Linux due to the lack of a proper X server.")
 def test_del_undo_redo_shortcuts(editor_bot):
     """
     Test that the undo and redo keyboard shortcuts are working as expected
@@ -121,6 +129,9 @@ def test_del_undo_redo_shortcuts(editor_bot):
     assert editor.toPlainText() == 'Line1\nLine2\nLine3\nLine4\n'
 
 
+@pytest.mark.skipif(
+    sys.platform.startswith('linux') and os.environ.get('CI') is not None,
+    reason="It fails on Linux due to the lack of a proper X server.")
 def test_copy_cut_paste_shortcuts(editor_bot):
     """
     Test that the copy, cut, and paste keyboard shortcuts are working as
@@ -152,6 +163,9 @@ def test_copy_cut_paste_shortcuts(editor_bot):
     assert editor.toPlainText() == '\nLine2\nLine3\nLine4\n'
 
 
+@pytest.mark.skipif(
+    sys.platform.startswith('linux') and os.environ.get('CI') is not None,
+    reason="It fails on Linux due to the lack of a proper X server.")
 def test_select_all_shortcut(editor_bot):
     """
     Test that the select all keyboard shortcut is working as
@@ -165,6 +179,9 @@ def test_select_all_shortcut(editor_bot):
     assert editor.get_selected_text() == 'Line1\nLine2\nLine3\nLine4\n'
 
 
+@pytest.mark.skipif(
+    sys.platform.startswith('linux') and os.environ.get('CI') is not None,
+    reason="It fails on Linux due to the lack of a proper X server.")
 def test_delete_line_shortcut(editor_bot):
     """
     Test that the delete line keyboard shortcut is working as
@@ -179,6 +196,9 @@ def test_delete_line_shortcut(editor_bot):
     assert editor.toPlainText() == 'Line1\nLine3\nLine4\n'
 
 
+@pytest.mark.skipif(
+    sys.platform.startswith('linux') and os.environ.get('CI') is not None,
+    reason="It fails on Linux due to the lack of a proper X server.")
 def test_go_to_line_shortcut(editor_bot, mocker):
     """
     Test that the go to line keyboard shortcut is working
@@ -195,6 +215,9 @@ def test_go_to_line_shortcut(editor_bot, mocker):
     assert editor.get_cursor_line_column() == (2, 0)
 
 
+@pytest.mark.skipif(
+    sys.platform.startswith('linux') and os.environ.get('CI') is not None,
+    reason="It fails on Linux due to the lack of a proper X server.")
 def test_transform_to_lowercase_shortcut(editor_bot):
     """
     Test that the transform to lowercase shorcut is working as expected with
@@ -209,6 +232,9 @@ def test_transform_to_lowercase_shortcut(editor_bot):
     assert editor.toPlainText() == 'line1\nline2\nline3\nline4\n'
 
 
+@pytest.mark.skipif(
+    sys.platform.startswith('linux') and os.environ.get('CI') is not None,
+    reason="It fails on Linux due to the lack of a proper X server.")
 def test_transform_to_uppercase_shortcut(editor_bot):
     """
     Test that the transform to uppercase shorcuts is working as expected with
@@ -222,6 +248,35 @@ def test_transform_to_uppercase_shortcut(editor_bot):
     qtbot.keyClick(editor, Qt.Key_U,
                    modifier=Qt.ControlModifier | Qt.ShiftModifier)
     assert editor.toPlainText() == 'LINE1\nLINE2\nLINE3\nLINE4\n'
+
+
+@pytest.mark.skipif(
+    sys.platform.startswith('linux') and os.environ.get('CI') is not None,
+    reason="It fails on Linux due to the lack of a proper X server.")
+def test_next_and_previous_word_shortcuts(editor_bot):
+    """
+    Test that the next word and previous word shortcuts are working as
+    expected with the default Spyder keybindings.
+    """
+    editorstack, qtbot = editor_bot
+    editor = editorstack.get_current_editor()
+
+    # Go to the next word 3 times.
+    assert editor.get_cursor_line_column() == (0, 0)
+    qtbot.keyClick(editor, Qt.Key_Right, modifier=Qt.ControlModifier)
+    assert editor.get_cursor_line_column() == (0, 5)
+    qtbot.keyClick(editor, Qt.Key_Right, modifier=Qt.ControlModifier)
+    assert editor.get_cursor_line_column() == (1, 0)
+    qtbot.keyClick(editor, Qt.Key_Right, modifier=Qt.ControlModifier)
+    assert editor.get_cursor_line_column() == (1, 5)
+
+    # Go to the previous word 3 times.
+    qtbot.keyClick(editor, Qt.Key_Left, modifier=Qt.ControlModifier)
+    assert editor.get_cursor_line_column() == (1, 0)
+    qtbot.keyClick(editor, Qt.Key_Left, modifier=Qt.ControlModifier)
+    assert editor.get_cursor_line_column() == (0, 5)
+    qtbot.keyClick(editor, Qt.Key_Left, modifier=Qt.ControlModifier)
+    assert editor.get_cursor_line_column() == (0, 0)
 
 
 @pytest.mark.skipif(sys.platform == 'darwin', reason="Not valid in macOS")
