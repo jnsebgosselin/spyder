@@ -33,7 +33,6 @@ class FindInFiles(SpyderPluginWidget):
     """Find in files DockWidget."""
 
     CONF_SECTION = 'find_in_files'
-    sig_option_changed = Signal(str, object)
     toggle_visibility = Signal(bool)
 
     def __init__(self, parent=None):
@@ -61,7 +60,8 @@ class FindInFiles(SpyderPluginWidget):
                                    supported_encodings,
                                    more_options,
                                    case_sensitive, path_history,
-                                   options_button=self.options_button)
+                                   options_button=self.options_button,
+                                   text_color=ima.MAIN_FG_COLOR)
 
         layout = QVBoxLayout()
         layout.addWidget(self.findinfiles)
@@ -122,7 +122,7 @@ class FindInFiles(SpyderPluginWidget):
     #------ SpyderPluginWidget API --------------------------------------------
     def get_plugin_title(self):
         """Return widget title"""
-        return _("Find in files")
+        return _("Find")
     
     def get_focus_widget(self):
         """
@@ -186,6 +186,10 @@ class FindInFiles(SpyderPluginWidget):
             self.set_option('case_sensitive', case_sensitive)
             self.set_option('path_history', path_history)
         return True
+
+    def on_first_registration(self):
+        """Action to be performed on first plugin registration"""
+        self.main.tabify_plugins(self.main.variableexplorer, self)
 
 
 def test():

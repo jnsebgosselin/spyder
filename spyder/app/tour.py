@@ -28,9 +28,17 @@ from qtpy.QtWidgets import (QAction, QApplication, QComboBox, QDialog,
 
 # Local imports
 from spyder.config.base import _, get_image_path
+from spyder.config.gui import is_dark_interface
 from spyder.py3compat import to_binary_string
 from spyder.utils.qthelpers import add_actions, create_action
 from spyder.utils import icon_manager as ima
+
+
+if is_dark_interface():
+    MAIN_TOP_COLOR = MAIN_BG_COLOR = QColor.fromRgb(25, 35, 45)
+else:
+    MAIN_TOP_COLOR = QColor.fromRgb(230, 230, 230)
+    MAIN_BG_COLOR = QColor.fromRgb(255, 255, 255)
 
 # FIXME: Known issues
 # How to handle if an specific dockwidget does not exists/load, like ipython
@@ -74,7 +82,7 @@ def get_tours(index=None):
 def get_tour(index):
     """
     This function generates a list of tours.
-    
+
     The index argument is used to retrieve a particular tour. If None is
     passed, it will return the full list of tours. If instead -1 is given,
     this function will return a test tour
@@ -163,7 +171,7 @@ def get_tour(index):
               'widgets': [sw.ipython_console],
               'run': ["li = list(range(100))", "d = {'a': 1, 'b': 2}"]
               },
-              
+
              {'title': _("The Variable Explorer"),
               'content': _("In this pane you can view and edit the variables "
                            "generated during the execution of a program, or "
@@ -441,9 +449,9 @@ class FadingCanvas(FadingDialog):
                     width, height = geo.width(), geo.height()
                     point = widget.mapTo(self.parent, QPoint(0, 0))
                     x, y = point.x(), point.y()
-    
+
                     temp_path.addRect(QRectF(x, y, width, height))
-    
+
                     temp_region = QRegion(x, y, width, height)
 
                 if self.interaction_on:
@@ -527,7 +535,8 @@ class FadingCanvas(FadingDialog):
 
 class FadingTipBox(FadingDialog):
     """ """
-    def __init__(self, parent, opacity, duration, easing_curve, tour=None):
+    def __init__(self, parent, opacity, duration, easing_curve, tour=None,
+                 color_top=None, color_back=None, combobox_background=None):
         super(FadingTipBox, self).__init__(parent, opacity, duration,
                                            easing_curve)
         self.holder = self.anim  # needed for qt to work
@@ -535,8 +544,6 @@ class FadingTipBox(FadingDialog):
         self.tour = tour
 
         self.frames = None
-        self.color_top = QColor.fromRgb(230, 230, 230)
-        self.color_back = QColor.fromRgb(255, 255, 255)
         self.offset_shadow = 0
         self.fixed_width = 300
 
@@ -584,26 +591,29 @@ class FadingTipBox(FadingDialog):
 
         arrow = get_image_path('hide.png')
 
-        self.stylesheet = '''QComboBox {
+        self.color_top = color_top
+        self.color_back = color_back
+        self.combobox_background = combobox_background
+        self.stylesheet = '''QComboBox {{
                              padding-left: 5px;
-                             background-color: rgbs(230,230,230,100%);
+                             background-color: {}
                              border-width: 0px;
                              border-radius: 0px;
                              min-height:20px;
                              max-height:20px;
-                             }
+                             }}
 
-                             QComboBox::drop-down  {
+                             QComboBox::drop-down  {{
                              subcontrol-origin: padding;
                              subcontrol-position: top left;
                              border-width: 0px;
-                             }
-                             
-                             QComboBox::down-arrow {
-                             image: url(''' + arrow + ''');
-                             }
-                             
-                             '''
+                             }}
+
+                             QComboBox::down-arrow {{
+                             image: url({});
+                             }}
+
+                             '''.format(self.combobox_background.name(), arrow)
         # Windows fix, slashes should be always in unix-style
         self.stylesheet = self.stylesheet.replace('\\', '/')
 
@@ -838,8 +848,8 @@ class AnimatedTour(QWidget):
         QWidget.__init__(self, parent)
 
         self.parent = parent
-        
-        # Variables to adjust 
+
+        # Variables to adjust
         self.duration_canvas = [666, 666]
         self.duration_tips = [333, 333]
         self.opacity_canvas = [0.0, 0.7]
@@ -869,7 +879,9 @@ class AnimatedTour(QWidget):
                                    self.color, tour=self)
         self.tips = FadingTipBox(self.parent, self.opacity_tips,
                                  self.duration_tips, self.easing_curve,
-                                 tour=self)
+                                 tour=self, color_top=MAIN_TOP_COLOR,
+                                 color_back=MAIN_BG_COLOR,
+                                 combobox_background=MAIN_TOP_COLOR)
 
         # Widgets setup
         # Needed to fix issue #2204
@@ -1068,13 +1080,13 @@ class AnimatedTour(QWidget):
             if dockwidgets[0] is not None:
                 geo = dockwidgets[0].geometry()
                 x, y, width, height = geo.x(), geo.y(), geo.width(), geo.height()
-    
+
                 point = dockwidgets[0].mapToGlobal(QPoint(0, 0))
                 x_glob, y_glob = point.x(), point.y()
-    
+
                 # Check if is too tall and put to the side
                 y_fac = (height / self.height_main) * 100
-    
+
                 if y_fac > 60:  # FIXME:
                     if x < self.tips.width():
                         x = x_glob + width + delta
@@ -1178,7 +1190,7 @@ class AnimatedTour(QWidget):
         self.canvas.hide()
 
         try:
-            # set the last played frame by updating the available tours in 
+            # set the last played frame by updating the available tours in
             # parent. This info will be lost on restart.
             self.parent.tours_available[self.active_tour_index]['last'] =\
                 self.step_current
@@ -1232,13 +1244,13 @@ class AnimatedTour(QWidget):
 
     def gain_focus(self):
         """Confirm if the tour regains focus and unhides the tips."""
-        if (self.is_running and self.any_has_focus() and 
+        if (self.is_running and self.any_has_focus() and
             not self.setting_data and self.hidden):
             self.unhide_tips()
 
     def any_has_focus(self):
         """Returns if tour or any of its components has focus."""
-        f = (self.hasFocus() or self.parent.hasFocus() or 
+        f = (self.hasFocus() or self.parent.hasFocus() or
              self.tips.hasFocus() or self.canvas.hasFocus())
         return f
 

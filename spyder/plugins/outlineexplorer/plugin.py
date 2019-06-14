@@ -6,7 +6,7 @@
 
 """Outline Explorer Plugin
 
-Data for outline are provided by method .get_outlineexplorer_data() of
+Data for outline are provided by the outlineexplorer data of
 highlighter of assigned editor. For example, for Python files code editor uses
 highlighter spyder.utils.syntaxhighlighters.PythonSH
 """
@@ -34,14 +34,17 @@ class OutlineExplorer(SpyderPluginWidget):
         show_all_files = self.get_option('show_all_files')
         group_cells = self.get_option('group_cells')
         show_comments = self.get_option('show_comments')
+        sort_files_alphabetically = self.get_option(
+            'sort_files_alphabetically')
 
         self.explorer = OutlineExplorerWidget(
-                                       self,
-                                       show_fullpath=show_fullpath,
-                                       show_all_files=show_all_files,
-                                       group_cells=group_cells,
-                                       show_comments=show_comments,
-                                       options_button=self.options_button)
+           self,
+           show_fullpath=show_fullpath,
+           show_all_files=show_all_files,
+           group_cells=group_cells,
+           show_comments=show_comments,
+           sort_files_alphabetically=sort_files_alphabetically,
+           options_button=self.options_button)
         layout = QVBoxLayout()
         layout.addWidget(self.explorer)
         self.setLayout(layout)

@@ -6,10 +6,10 @@
 
 """Spyder Language Server Protocol Client document handler routines."""
 
+import logging
 import os.path as osp
 
 from spyder.py3compat import PY2
-from spyder.config.base import debug_print
 from spyder.plugins.editor.lsp import (
     LSPRequestTypes, InsertTextFormat, CompletionItemKind,
     ClientConstants)
@@ -18,9 +18,14 @@ from spyder.plugins.editor.lsp.decorators import handles, send_request
 if PY2:
     import pathlib2 as pathlib
     from urlparse import urlparse
+    from urllib import url2pathname
 else:
     import pathlib
     from urllib.parse import urlparse
+    from urllib.request import url2pathname
+
+
+logger = logging.getLogger(__name__)
 
 
 def path_as_uri(path):
@@ -28,21 +33,24 @@ def path_as_uri(path):
 
 
 class DocumentProvider:
-    def register_file(self, filename, signal):
+    def register_file(self, filename, codeeditor):
         filename = path_as_uri(filename)
         if filename not in self.watched_files:
             self.watched_files[filename] = []
-        self.watched_files[filename].append(signal)
+        self.watched_files[filename].append(codeeditor)
 
     @handles(LSPRequestTypes.DOCUMENT_PUBLISH_DIAGNOSTICS)
     def process_document_diagnostics(self, response, *args):
         uri = response['uri']
         diagnostics = response['diagnostics']
-        callbacks = self.watched_files[uri]
-        for callback in callbacks:
-            callback.emit(
-                LSPRequestTypes.DOCUMENT_PUBLISH_DIAGNOSTICS,
-                {'params': diagnostics})
+        if uri in self.watched_files:
+            callbacks = self.watched_files[uri]
+            for callback in callbacks:
+                callback.handle_response(
+                    LSPRequestTypes.DOCUMENT_PUBLISH_DIAGNOSTICS,
+                    {'params': diagnostics})
+        else:
+            logger.debug("Received diagnotics for file not open: " + uri)
 
     @send_request(
         method=LSPRequestTypes.DOCUMENT_DID_CHANGE, requires_response=False)
@@ -63,7 +71,8 @@ class DocumentProvider:
     def document_open(self, editor_params):
         uri = path_as_uri(editor_params['file'])
         if uri not in self.watched_files:
-            self.register_file(editor_params['file'], editor_params['signal'])
+            self.register_file(
+                editor_params['file'], editor_params['codeeditor'])
         params = {
             'textDocument': {
                 'uri': uri,
@@ -93,18 +102,19 @@ class DocumentProvider:
     def process_document_completion(self, response, req_id):
         if isinstance(response, dict):
             response = response['items']
-        for item in response:
-            item['kind'] = item.get('kind', CompletionItemKind.TEXT)
-            item['detail'] = item.get('detail', '')
-            item['documentation'] = item.get('documentation', '')
-            item['sortText'] = item.get('sortText', item['label'])
-            item['filterText'] = item.get('filterText', item['label'])
-            item['insertTextFormat'] = item.get(
-                'insertTextFormat', InsertTextFormat.PLAIN_TEXT)
-            item['insertText'] = item.get('insertText', item['label'])
+        if response is not None:
+            for item in response:
+                item['kind'] = item.get('kind', CompletionItemKind.TEXT)
+                item['detail'] = item.get('detail', '')
+                item['documentation'] = item.get('documentation', '')
+                item['sortText'] = item.get('sortText', item['label'])
+                item['filterText'] = item.get('filterText', item['label'])
+                item['insertTextFormat'] = item.get(
+                    'insertTextFormat', InsertTextFormat.PLAIN_TEXT)
+                item['insertText'] = item.get('insertText', item['label'])
 
         if req_id in self.req_reply:
-            self.req_reply[req_id].emit(
+            self.req_reply[req_id].handle_response(
                 LSPRequestTypes.DOCUMENT_COMPLETION, {'params': response})
 
     @send_request(method=LSPRequestTypes.DOCUMENT_SIGNATURE)
@@ -129,7 +139,7 @@ class DocumentProvider:
         else:
             response = None
         if req_id in self.req_reply:
-            self.req_reply[req_id].emit(
+            self.req_reply[req_id].handle_response(
                 LSPRequestTypes.DOCUMENT_SIGNATURE,
                 {'params': response})
 
@@ -155,7 +165,7 @@ class DocumentProvider:
         if isinstance(contents, dict):
             contents = contents['value']
         if req_id in self.req_reply:
-            self.req_reply[req_id].emit(
+            self.req_reply[req_id].handle_response(
                 LSPRequestTypes.DOCUMENT_HOVER,
                 {'params': contents})
 
@@ -179,11 +189,14 @@ class DocumentProvider:
             if len(result) > 0:
                 result = result[0]
                 uri = urlparse(result['uri'])
-                result['file'] = osp.join(uri.netloc, uri.path)
+                netloc, path = uri.netloc, uri.path
+                # Prepend UNC share notation if we have a UNC path.
+                netloc = '\\\\' + netloc if netloc else netloc
+                result['file'] = url2pathname(netloc + path)
             else:
                 result = None
         if req_id in self.req_reply:
-            self.req_reply[req_id].emit(
+            self.req_reply[req_id].handle_response(
                 LSPRequestTypes.DOCUMENT_DEFINITION,
                 {'params': result})
 
@@ -198,11 +211,29 @@ class DocumentProvider:
         }
         return params
 
+    @send_request(method=LSPRequestTypes.DOCUMENT_DID_SAVE,
+                  requires_response=False)
+    def document_did_save_notification(self, params):
+        """
+        Handle the textDocument/didSave message received from an LSP server.
+        """
+        text = None
+        if 'text' in params:
+            text = params['text']
+        params = {
+            'textDocument': {
+                'uri': path_as_uri(params['file'])
+            }
+        }
+        if text is not None:
+            params['text'] = text
+        return params
+
     @send_request(method=LSPRequestTypes.DOCUMENT_DID_CLOSE,
                   requires_response=False)
     def document_did_close(self, params):
-        file_signal = params['signal']
-        debug_print('[{0}] File: {1}'.format(
+        codeeditor = params['codeeditor']
+        logger.debug('[{0}] File: {1}'.format(
             LSPRequestTypes.DOCUMENT_DID_CLOSE, params['file']))
         filename = path_as_uri(params['file'])
 
@@ -214,15 +245,18 @@ class DocumentProvider:
         if filename not in self.watched_files:
             params[ClientConstants.CANCEL] = True
         else:
-            signals = self.watched_files[filename]
+            editors = self.watched_files[filename]
+            if len(editors) > 1:
+                params[ClientConstants.CANCEL] = True
             idx = -1
-            for i, signal in enumerate(signals):
-                if id(file_signal) == id(signal):
+            for i, editor in enumerate(editors):
+                if id(codeeditor) == id(editor):
                     idx = i
                     break
             if idx > 0:
-                signals.pop(idx)
+                editors.pop(idx)
 
-            if len(signals) == 0:
+            if len(editors) == 0:
                 self.watched_files.pop(filename)
+
         return params
