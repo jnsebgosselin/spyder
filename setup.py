@@ -43,8 +43,8 @@ PY3 = sys.version_info[0] == 3
 # Taken from the notebook setup.py -- Modified BSD License
 #==============================================================================
 v = sys.version_info
-if v[:2] < (2, 7) or (v[0] >= 3 and v[:2] < (3, 4)):
-    error = "ERROR: Spyder requires Python version 2.7 or 3.4 and above."
+if v[:2] < (2, 7) or (v[0] >= 3 and v[:2] < (3, 5)):
+    error = "ERROR: Spyder requires Python version 2.7 or 3.5 and above."
     print(error, file=sys.stderr)
     sys.exit(1)
 
@@ -127,7 +127,8 @@ CMDCLASS = {'install_data': MyInstallData}
 # Main scripts
 #==============================================================================
 # NOTE: the '[...]_win_post_install.py' script is installed even on non-Windows
-# platforms due to a bug in pip installation process (see Issue 1158)
+# platforms due to a bug in pip installation process
+# See spyder-ide/spyder#1158.
 SCRIPTS = ['%s_win_post_install.py' % NAME]
 if PY3 and sys.platform.startswith('linux'):
     SCRIPTS.append('spyder3')
@@ -139,7 +140,7 @@ else:
 # Files added to the package
 #==============================================================================
 EXTLIST = ['.pot', '.po', '.mo', '.svg', '.png', '.css', '.html', '.js',
-           '.ini', '.txt', '.qss', '.ttf', '.json']
+           '.ini', '.txt', '.qss', '.ttf', '.json', '.rst', '.bloom']
 if os.name == 'nt':
     SCRIPTS += ['spyder.bat']
     EXTLIST += ['.ico']
@@ -199,50 +200,52 @@ if any(arg == 'bdist_wheel' for arg in sys.argv):
     import setuptools     # analysis:ignore
 
 install_requires = [
-    'cloudpickle',
-    'pygments>=2.0',
-    'qtconsole>=4.5.0',
-    'nbconvert',
-    'sphinx',
-    'pylint',
-    'psutil',
-    'qtawesome>=0.5.7',
-    'qtpy>=1.5.0',
-    'pickleshare',
-    'pyzmq',
-    'chardet>=2.0.0',
-    'numpydoc',
-    'spyder-kernels>=1.2',
-    'qdarkstyle>=2.6.4',
+    'applaunchservices;platform_system=="Darwin"',
     'atomicwrites',
+    'chardet>=2.0.0',
+    'cloudpickle',
     'diff-match-patch',
-    'watchdog',
+    # This is here until Jedi 0.15+ fixes completions for
+    # Numpy and Pandas
+    'jedi==0.14.1',
     # Don't require keyring for Python 2 and Linux
     # because it depends on system packages
     'keyring;sys_platform!="linux2"',
-    # Packages for pyqt5 are only available in
-    # Python 3
-    'pyqt5<5.13;python_version>="3"',
-    # pyqt5 5.12 split WebEngine into the
-    # pyqtwebengine module
-    'pyqtwebengine<5.13;python_version>="3"',
-    # Pyls with all its dependencies
-    'python-language-server[all]>=0.19.0,<0.25',
+    'nbconvert',
+    'numpydoc',
     # Required to get SSH connections to remote kernels
+    'paramiko;platform_system=="Windows"',
     'pexpect',
-    'paramiko;platform_system=="Windows"'
+    'pickleshare',
+    'psutil',
+    'pygments>=2.0',
+    'pylint',
+    'pympler',
+    'pyqt5<5.13;python_version>="3"',
+    'pyqtwebengine<5.13;python_version>="3"',
+    'python-language-server[all]>=0.29.3,<0.30.0',
+    'pyxdg>=0.26;platform_system=="Linux"',
+    'pyzmq',
+    'qdarkstyle>=2.7',
+    'qtawesome>=0.5.7',
+    'qtconsole>=4.5.5',
+    'qtpy>=1.5.0',
+    'sphinx',
+    'spyder-kernels>=1.7.0,<1.8.0',
+    'watchdog',
 ]
 
 extras_require = {
     'test:python_version == "2.7"': ['mock'],
     'test:platform_system == "Windows"': ['pywin32'],
-    'test': ['pytest<4.1',
+    'test': ['pytest<5.0',
              'pytest-qt',
              'pytest-mock',
              'pytest-cov',
              'pytest-xvfb;platform_system=="Linux"',
              'pytest-ordering',
              'pytest-lazy-fixture',
+             'pytest-faulthandler',
              'mock',
              'flaky',
              'pandas',

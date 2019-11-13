@@ -38,6 +38,7 @@ class ToolTipWidget(QLabel):
     Shows tooltips that can be styled with the different themes.
     """
 
+    sig_completion_help_requested = Signal(str, str)
     sig_help_requested = Signal(str)
 
     def __init__(self, parent=None, as_tooltip=False):
@@ -47,6 +48,7 @@ class ToolTipWidget(QLabel):
         super(ToolTipWidget, self).__init__(parent, Qt.ToolTip)
 
         # Variables
+        self.completion_doc = None
         self._url = ''
         self.app = QCoreApplication.instance()
         self.as_tooltip = as_tooltip
@@ -111,22 +113,33 @@ class ToolTipWidget(QLabel):
     # ------------------------------------------------------------------------
     # --- 'ToolTipWidget' interface
     # ------------------------------------------------------------------------
-    def show_tip(self, point, tip, cursor=None):
+    def show_basic_tip(self, point, tip):
+        """Show basic tip."""
+        self.tip = tip
+        self.setText(tip)
+        self.resize(self.sizeHint())
+        y = point.y() - self.height()
+        self.move(point.x(), y)
+        self.show()
+        return True
+
+    def show_tip(self, point, tip, cursor=None, completion_doc=None):
         """
         Attempts to show the specified tip at the current cursor location.
         """
         # Don't attempt to show it if it's already visible and the text
         # to be displayed is the same as the one displayed before.
-        if self.isVisible():
-            if self.tip == tip:
-                return True
-            else:
-                self.hide()
+        if self.tip == tip:
+            if not self.isVisible():
+                self.show()
+            return
 
         # Set the text and resize the widget accordingly.
         self.tip = tip
         self.setText(tip)
         self.resize(self.sizeHint())
+
+        self.completion_doc = completion_doc
 
         padding = 0
         text_edit = self._text_edit
@@ -183,7 +196,8 @@ class ToolTipWidget(QLabel):
             point.setX(adjusted_point.x() - tip_width - padding)
 
         self.move(point)
-        self.show()
+        if not self.isVisible():
+            self.show()
         return True
 
     def mousePressEvent(self, event):
@@ -191,7 +205,12 @@ class ToolTipWidget(QLabel):
         Reimplemented to hide it when focus goes out of the main window.
         """
         QApplication.restoreOverrideCursor()
-        self.sig_help_requested.emit(self._url)
+        if self.completion_doc:
+            name = self.completion_doc.get('name', '')
+            signature = self.completion_doc.get('signature', '')
+            self.sig_completion_help_requested.emit(name, signature)
+        else:
+            self.sig_help_requested.emit(self._url)
         super(ToolTipWidget, self).mousePressEvent(event)
         self._hide()
 
@@ -319,8 +338,12 @@ class CallTipWidget(QLabel):
         """ Reimplemented to disconnect signal handlers and event filter.
         """
         super(CallTipWidget, self).hideEvent(event)
-        self._text_edit.cursorPositionChanged.disconnect(
-            self._cursor_position_changed)
+        # This is needed for issue spyder-ide/spyder#9221,
+        try:
+            self._text_edit.cursorPositionChanged.disconnect(
+                self._cursor_position_changed)
+        except TypeError:
+            pass
         self._text_edit.removeEventFilter(self)
 
     def leaveEvent(self, event):
